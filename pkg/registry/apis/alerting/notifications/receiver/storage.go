@@ -72,7 +72,7 @@ func NewStorage(
 		if err := s.CompleteWithOptions(options); err != nil {
 			return nil, err
 		}
-		return dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, storage{Store: s})
+		return dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, storage{Store: s}, desiredMode, reg, model.GROUP, "receivers", namespacer)
 	}
 	return legacyStore, nil
 }
