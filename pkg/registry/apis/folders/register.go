@@ -142,7 +142,8 @@ func (b *FolderAPIBuilder) GetAPIGroupInfo(
 		if err != nil {
 			return nil, err
 		}
-		storage[resourceInfo.StoragePath()], err = dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store)
+
+		storage[resourceInfo.StoragePath()], err = dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store, grafanarest.Mode1, reg, v0alpha1.GROUP, v0alpha1.RESOURCE, b.namespacer)
 		if err != nil {
 			return nil, err
 		}

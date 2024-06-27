@@ -124,7 +124,7 @@ func (b *PlaylistAPIBuilder) GetAPIGroupInfo(
 			return nil, err
 		}
 
-		dualWriter, err := dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store)
+		dualWriter, err := dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store, context.Background(), b.kvStore, playlist.GROUPRESOURCE, desiredMode, reg, playlist.GROUP, playlist.RESOURCE, b.namespacer)
 		if err != nil {
 			return nil, err
 		}

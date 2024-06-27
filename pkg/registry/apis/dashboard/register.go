@@ -171,7 +171,7 @@ func (b *DashboardsAPIBuilder) GetAPIGroupInfo(
 		if err := store.CompleteWithOptions(options); err != nil {
 			return nil, err
 		}
-		storage[dash.StoragePath()], err = dualWriteBuilder(dash.GroupResource(), legacyStore, store)
+		storage[dash.StoragePath()], err = dualWriteBuilder(dash.GroupResource(), legacyStore, store, grafanarest.Mode1, reg, v0alpha1.GROUP, "dashboards", b.namespacer)
 		if err != nil {
 			return nil, err
 		}
