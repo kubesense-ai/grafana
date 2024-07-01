@@ -5,6 +5,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -72,7 +73,15 @@ func NewStorage(
 		if err := s.CompleteWithOptions(options); err != nil {
 			return nil, err
 		}
-		return dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, storage{Store: s}, desiredMode, reg, model.GROUP, "receivers", namespacer)
+
+		requestInfo := &k8srequest.RequestInfo{
+			APIGroup:  model.GROUP,
+			Resource:  "receivers",
+			Name:      "",
+			Namespace: namespacer(int64(1)),
+		}
+
+		return dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, storage{Store: s}, desiredMode, reg, requestInfo)
 	}
 	return legacyStore, nil
 }

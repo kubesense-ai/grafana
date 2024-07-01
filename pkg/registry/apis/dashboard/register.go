@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -171,7 +172,15 @@ func (b *DashboardsAPIBuilder) GetAPIGroupInfo(
 		if err := store.CompleteWithOptions(options); err != nil {
 			return nil, err
 		}
-		storage[dash.StoragePath()], err = dualWriteBuilder(dash.GroupResource(), legacyStore, store, grafanarest.Mode1, reg, v0alpha1.GROUP, "dashboards", b.namespacer)
+
+		requestInfo := &k8srequest.RequestInfo{
+			APIGroup:  v0alpha1.GROUP,
+			Resource:  "dashboards",
+			Name:      "",
+			Namespace: b.namespacer(int64(1)),
+		}
+
+		storage[dash.StoragePath()], err = dualWriteBuilder(dash.GroupResource(), legacyStore, store, grafanarest.Mode1, reg, requestInfo)
 		if err != nil {
 			return nil, err
 		}
