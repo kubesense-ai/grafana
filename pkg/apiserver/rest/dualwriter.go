@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	serverlocksvc "github.com/grafana/grafana/pkg/infra/serverlock"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -104,7 +105,7 @@ const (
 
 // TODO: make this function private as there should only be one public way of setting the dual writing mode
 // NewDualWriter returns a new DualWriter.
-func NewDualWriter(mode DualWriterMode, legacy LegacyStorage, storage Storage, reg prometheus.Registerer, requestInfo *request.RequestInfo) DualWriter {
+func NewDualWriter(mode DualWriterMode, legacy LegacyStorage, storage Storage, reg prometheus.Registerer, requestInfo *request.RequestInfo, serverLockService *serverlocksvc.ServerLockService) DualWriter {
 	metrics := &dualWriterMetrics{}
 	metrics.init(reg)
 	switch mode {
@@ -115,7 +116,7 @@ func NewDualWriter(mode DualWriterMode, legacy LegacyStorage, storage Storage, r
 		return newDualWriterMode1(legacy, storage, metrics)
 	case Mode2:
 		// write to both, read from storage but use legacy as backup
-		return newDualWriterMode2(legacy, storage, metrics, requestInfo)
+		return newDualWriterMode2(legacy, storage, metrics, requestInfo, serverLockService)
 	case Mode3:
 		// write to both, read from storage only
 		return newDualWriterMode3(legacy, storage, metrics)
@@ -159,6 +160,7 @@ func SetDualWritingMode(
 	desiredMode DualWriterMode,
 	reg prometheus.Registerer,
 	requestInfo *request.RequestInfo,
+	serverLockService *serverlocksvc.ServerLockService,
 ) (DualWriterMode, error) {
 	// Mode0 means no DualWriter
 	if desiredMode == Mode0 {
@@ -221,7 +223,7 @@ func SetDualWritingMode(
 	}
 
 	// 	#TODO add support for other combinations of desired and current modes
-	dualWriter := NewDualWriter(currentMode, legacy, storage, reg, requestInfo)
+	dualWriter := NewDualWriter(currentMode, legacy, storage, reg, requestInfo, serverLockService)
 
 	if currentMode == Mode2 {
 		err = dualWriter.Sync(ctx)

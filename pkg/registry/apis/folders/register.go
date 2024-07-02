@@ -151,7 +151,7 @@ func (b *FolderAPIBuilder) GetAPIGroupInfo(
 			Namespace: b.namespacer(int64(1)),
 		}
 
-		storage[resourceInfo.StoragePath()], err = dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store, grafanarest.Mode1, reg, requestInfo)
+		storage[resourceInfo.StoragePath()], err = dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store, grafanarest.Mode1, reg, requestInfo, nil)
 		if err != nil {
 			return nil, err
 		}

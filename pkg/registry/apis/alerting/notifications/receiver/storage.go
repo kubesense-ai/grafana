@@ -81,7 +81,7 @@ func NewStorage(
 			Namespace: namespacer(int64(1)),
 		}
 
-		return dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, storage{Store: s}, desiredMode, reg, requestInfo)
+		return dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, storage{Store: s}, desiredMode, reg, requestInfo, nil)
 	}
 	return legacyStore, nil
 }
