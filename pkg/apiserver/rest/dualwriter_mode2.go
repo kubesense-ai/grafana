@@ -562,8 +562,6 @@ func (d *DualWriterMode2) Sync(ctx context.Context) error {
 				}
 			}
 		}
-
-		return
 	})
 	if err != nil {
 		log.Error(err, "Server lock for dualwriter mode 2 sync already exists")
