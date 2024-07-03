@@ -21,6 +21,7 @@ import (
 	"github.com/grafana/grafana/pkg/apimachinery/utils"
 	"github.com/grafana/grafana/pkg/apis/folder/v0alpha1"
 	grafanarest "github.com/grafana/grafana/pkg/apiserver/rest"
+	serverlocksvc "github.com/grafana/grafana/pkg/infra/serverlock"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/apiserver/builder"
 	"github.com/grafana/grafana/pkg/services/apiserver/endpoints/request"
@@ -37,11 +38,12 @@ var resourceInfo = v0alpha1.FolderResourceInfo
 
 // This is used just so wire has something unique to return
 type FolderAPIBuilder struct {
-	gv            schema.GroupVersion
-	features      featuremgmt.FeatureToggles
-	namespacer    request.NamespaceMapper
-	folderSvc     folder.Service
-	accessControl accesscontrol.AccessControl
+	gv                schema.GroupVersion
+	features          featuremgmt.FeatureToggles
+	namespacer        request.NamespaceMapper
+	folderSvc         folder.Service
+	accessControl     accesscontrol.AccessControl
+	serverLockService *serverlocksvc.ServerLockService
 }
 
 func RegisterAPIService(cfg *setting.Cfg,
@@ -50,17 +52,19 @@ func RegisterAPIService(cfg *setting.Cfg,
 	folderSvc folder.Service,
 	accessControl accesscontrol.AccessControl,
 	registerer prometheus.Registerer,
+	serverLockService *serverlocksvc.ServerLockService,
 ) *FolderAPIBuilder {
 	if !features.IsEnabledGlobally(featuremgmt.FlagGrafanaAPIServerWithExperimentalAPIs) {
 		return nil // skip registration unless opting into experimental apis
 	}
 
 	builder := &FolderAPIBuilder{
-		gv:            resourceInfo.GroupVersion(),
-		features:      features,
-		namespacer:    request.GetNamespaceMapper(cfg),
-		folderSvc:     folderSvc,
-		accessControl: accessControl,
+		gv:                resourceInfo.GroupVersion(),
+		features:          features,
+		namespacer:        request.GetNamespaceMapper(cfg),
+		folderSvc:         folderSvc,
+		accessControl:     accessControl,
+		serverLockService: serverLockService,
 	}
 	apiregistration.RegisterAPI(builder)
 	return builder
@@ -151,7 +155,7 @@ func (b *FolderAPIBuilder) GetAPIGroupInfo(
 			Namespace: b.namespacer(int64(1)),
 		}
 
-		storage[resourceInfo.StoragePath()], err = dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store, grafanarest.Mode1, reg, requestInfo, nil)
+		storage[resourceInfo.StoragePath()], err = dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store, grafanarest.Mode1, reg, requestInfo, b.serverLockService)
 		if err != nil {
 			return nil, err
 		}

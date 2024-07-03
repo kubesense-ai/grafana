@@ -16,6 +16,7 @@ import (
 
 	notificationsModels "github.com/grafana/grafana/pkg/apis/alerting_notifications/v0alpha1"
 	grafanarest "github.com/grafana/grafana/pkg/apiserver/rest"
+	serverlocksvc "github.com/grafana/grafana/pkg/infra/serverlock"
 	receiver "github.com/grafana/grafana/pkg/registry/apis/alerting/notifications/receiver"
 	timeInterval "github.com/grafana/grafana/pkg/registry/apis/alerting/notifications/timeinterval"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
@@ -30,10 +31,11 @@ var _ builder.APIGroupBuilder = (*NotificationsAPIBuilder)(nil)
 
 // This is used just so wire has something unique to return
 type NotificationsAPIBuilder struct {
-	authz      accesscontrol.AccessControl
-	ng         *ngalert.AlertNG
-	namespacer request.NamespaceMapper
-	gv         schema.GroupVersion
+	authz             accesscontrol.AccessControl
+	ng                *ngalert.AlertNG
+	namespacer        request.NamespaceMapper
+	gv                schema.GroupVersion
+	serverLockService *serverlocksvc.ServerLockService
 }
 
 func RegisterAPIService(
@@ -41,15 +43,17 @@ func RegisterAPIService(
 	apiregistration builder.APIRegistrar,
 	cfg *setting.Cfg,
 	ng *ngalert.AlertNG,
+	serverLockService *serverlocksvc.ServerLockService,
 ) *NotificationsAPIBuilder {
 	if ng.IsDisabled() || !features.IsEnabledGlobally(featuremgmt.FlagAlertingApiServer) {
 		return nil
 	}
 	builder := &NotificationsAPIBuilder{
-		ng:         ng,
-		namespacer: request.GetNamespaceMapper(cfg),
-		gv:         notificationsModels.SchemeGroupVersion,
-		authz:      ng.Api.AccessControl,
+		ng:                ng,
+		namespacer:        request.GetNamespaceMapper(cfg),
+		gv:                notificationsModels.SchemeGroupVersion,
+		authz:             ng.Api.AccessControl,
+		serverLockService: serverLockService,
 	}
 	apiregistration.RegisterAPI(builder)
 	return builder
@@ -75,7 +79,7 @@ func (t NotificationsAPIBuilder) GetAPIGroupInfo(
 ) (*genericapiserver.APIGroupInfo, error) {
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(notificationsModels.GROUP, scheme, metav1.ParameterCodec, codecs)
 
-	intervals, err := timeInterval.NewStorage(t.ng.Api.MuteTimings, t.namespacer, scheme, optsGetter, dualWriteBuilder)
+	intervals, err := timeInterval.NewStorage(t.ng.Api.MuteTimings, t.namespacer, scheme, optsGetter, dualWriteBuilder, desiredMode, reg, t.serverLockService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize time-interval storage: %w", err)
 	}
