@@ -4,11 +4,8 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
-	"github.com/grafana/grafana/pkg/infra/db"
-	serverlocksvc "github.com/grafana/grafana/pkg/infra/serverlock"
-	"github.com/grafana/grafana/pkg/infra/tracing"
-	"github.com/grafana/grafana/pkg/tests/testsuite"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -20,21 +17,7 @@ import (
 	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
 )
 
-func TestMain(m *testing.M) {
-	testsuite.Run(m)
-}
-
-func createTestableServerLock(t *testing.T) *serverlocksvc.ServerLockService {
-	t.Helper()
-	store := db.InitTestDB(t)
-	svc := serverlocksvc.ProvideService(store, tracing.InitializeTracerForTest())
-
-	return svc
-}
-
 func TestSetDualWritingMode(t *testing.T) {
-	sl := createTestableServerLock(t)
-
 	type testCase struct {
 		name         string
 		stackID      string
@@ -70,6 +53,7 @@ func TestSetDualWritingMode(t *testing.T) {
 		us := storageMock{m, s}
 
 		kvStore := &fakeNamespacedKV{data: make(map[string]string), namespace: "storage.dualwriting." + tt.stackID}
+		sl := &fakeServerLockService{}
 
 		p := prometheus.NewRegistry()
 		requestInfo := &k8srequest.RequestInfo{
@@ -146,5 +130,12 @@ func (f *fakeNamespacedKV) Get(ctx context.Context, key string) (string, bool, e
 
 func (f *fakeNamespacedKV) Set(ctx context.Context, key, value string) error {
 	f.data[f.namespace+key] = value
+	return nil
+}
+
+type fakeServerLockService struct{}
+
+func (f *fakeServerLockService) LockExecuteAndRelease(ctx context.Context, actionName string, maxInterval time.Duration, fn func(ctx context.Context)) error {
+	fn(ctx)
 	return nil
 }
