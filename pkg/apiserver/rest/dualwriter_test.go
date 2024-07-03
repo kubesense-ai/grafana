@@ -63,7 +63,12 @@ func TestSetDualWritingMode(t *testing.T) {
 			Namespace: "default",
 		}
 
-		dwMode, err := SetDualWritingMode(context.Background(), kvStore, ls, us, playlist.GROUPRESOURCE, tt.desiredMode, p, requestInfo, sl)
+		dwMode, err := SetDualWritingMode(context.Background(), kvStore, ls, us, playlist.GROUPRESOURCE, DualWriterOptions{
+			Mode:              tt.desiredMode,
+			Reg:               p,
+			RequestInfo:       requestInfo,
+			ServerLockService: sl,
+		})
 		assert.NoError(t, err)
 		assert.Equal(t, tt.expectedMode, dwMode)
 

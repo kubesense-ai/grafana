@@ -184,7 +184,12 @@ func (b *DashboardsAPIBuilder) GetAPIGroupInfo(
 			Namespace: b.namespacer(int64(1)),
 		}
 
-		storage[dash.StoragePath()], err = dualWriteBuilder(dash.GroupResource(), legacyStore, store, grafanarest.Mode1, reg, requestInfo, b.serverLockService)
+		storage[dash.StoragePath()], err = dualWriteBuilder(dash.GroupResource(), legacyStore, store, grafanarest.DualWriterOptions{
+			Mode:              grafanarest.Mode1,
+			Reg:               reg,
+			RequestInfo:       requestInfo,
+			ServerLockService: b.serverLockService,
+		})
 		if err != nil {
 			return nil, err
 		}
