@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -13,7 +12,6 @@ import (
 
 	// nolint:depguard
 	playlist "github.com/grafana/grafana/pkg/apis/playlist/v0alpha1"
-	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
 )
 
 func TestSetDualWritingMode(t *testing.T) {
@@ -120,12 +118,5 @@ func (f *fakeNamespacedKV) Get(ctx context.Context, key string) (string, bool, e
 
 func (f *fakeNamespacedKV) Set(ctx context.Context, key, value string) error {
 	f.data[f.namespace+key] = value
-	return nil
-}
-
-type fakeServerLockService struct{}
-
-func (f *fakeServerLockService) LockExecuteAndRelease(ctx context.Context, actionName string, maxInterval time.Duration, fn func(ctx context.Context)) error {
-	fn(ctx)
 	return nil
 }

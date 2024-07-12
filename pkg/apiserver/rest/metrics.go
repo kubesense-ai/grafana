@@ -9,11 +9,10 @@ import (
 )
 
 type dualWriterMetrics struct {
-	legacy      *prometheus.HistogramVec
-	storage     *prometheus.HistogramVec
-	outcome     *prometheus.HistogramVec
-	sync        *prometheus.HistogramVec
-	legacyReads *prometheus.CounterVec
+	legacy  *prometheus.HistogramVec
+	storage *prometheus.HistogramVec
+	outcome *prometheus.HistogramVec
+	sync    *prometheus.HistogramVec
 }
 
 // DualWriterStorageDuration is a metric summary for dual writer storage duration per mode
@@ -85,10 +84,6 @@ func (m *dualWriterMetrics) recordOutcome(mode string, name string, areEqual boo
 		observeValue = 1
 	}
 	m.outcome.WithLabelValues(mode, name, method).Observe(observeValue)
-}
-
-func (m *dualWriterMetrics) recordReadLegacyCount(kind string, method string) {
-	m.legacyReads.WithLabelValues(kind, method).Inc()
 }
 
 func (m *dualWriterMetrics) recordSyncDuration(isError bool, mode string, startFrom time.Time) {

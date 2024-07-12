@@ -24,9 +24,7 @@ type DualWriterMode2 struct {
 	Storage Storage
 	Legacy  LegacyStorage
 	*dualWriterMetrics
-	Log               klog.Logger
-	serverLockService ServerLockService
-	requestInfo       *request.RequestInfo
+	Log klog.Logger
 }
 
 const mode2Str = "2"

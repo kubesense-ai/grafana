@@ -189,8 +189,10 @@ func InstallAPIs(
 					Name:      "",
 					Namespace: request.GetNamespaceMapper(cfg)(int64(1)),
 				}
-				grafanarest.DualWriterMode2Sync(context.Background(), legacy, storage, reg, serverLock, requestInfo)
-
+				err = grafanarest.DualWriterMode2Sync(context.Background(), legacy, storage, reg, serverLock, requestInfo)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return grafanarest.NewDualWriter(currentMode, legacy, storage, reg), nil
 		}
