@@ -67,10 +67,7 @@ func TestMode2_Create(t *testing.T) {
 				tt.setupStorageFn(m, tt.input)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode2,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode2, ls, us, p)
 
 			obj, err := dw.Create(context.Background(), tt.input, createFn, &metav1.CreateOptions{})
 
@@ -146,10 +143,7 @@ func TestMode2_Get(t *testing.T) {
 				tt.setupStorageFn(m, tt.input)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode2,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode2, ls, us, p)
 
 			obj, err := dw.Get(context.Background(), tt.input, &metav1.GetOptions{})
 
@@ -202,10 +196,7 @@ func TestMode2_List(t *testing.T) {
 				tt.setupStorageFn(m)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode2,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode2, ls, us, p)
 
 			obj, err := dw.List(context.Background(), &metainternalversion.ListOptions{})
 
@@ -298,10 +289,7 @@ func TestMode2_Delete(t *testing.T) {
 				tt.setupStorageFn(m, tt.input)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode2,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode2, ls, us, p)
 
 			obj, _, err := dw.Delete(context.Background(), tt.input, func(context.Context, runtime.Object) error { return nil }, &metav1.DeleteOptions{})
 
@@ -373,10 +361,7 @@ func TestMode2_DeleteCollection(t *testing.T) {
 				tt.setupStorageFn(m)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode2,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode2, ls, us, p)
 
 			obj, err := dw.DeleteCollection(context.Background(), func(ctx context.Context, obj runtime.Object) error { return nil }, &metav1.DeleteOptions{TypeMeta: metav1.TypeMeta{Kind: tt.input}}, &metainternalversion.ListOptions{})
 
@@ -484,10 +469,7 @@ func TestMode2_Update(t *testing.T) {
 				tt.setupStorageFn(m, tt.input)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode2,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode2, ls, us, p)
 
 			obj, _, err := dw.Update(context.Background(), tt.input, updatedObjInfoObj{}, func(ctx context.Context, obj runtime.Object) error { return nil }, func(ctx context.Context, obj, old runtime.Object) error { return nil }, false, &metav1.UpdateOptions{})
 
@@ -622,60 +604,6 @@ func TestEnrichReturnedObject(t *testing.T) {
 
 			assert.Equal(t, accessorExpected.GetResourceVersion(), accessorReturned.GetResourceVersion())
 			assert.Equal(t, accessorExpected.GetUID(), accessorReturned.GetUID())
-		})
-	}
-}
-
-func TestMode2_Sync(t *testing.T) {
-	type testCase struct {
-		inputLegacy    *metainternalversion.ListOptions
-		setupLegacyFn  func(m *mock.Mock)
-		setupStorageFn func(m *mock.Mock)
-		name           string
-		wantErr        bool
-	}
-	tests :=
-		[]testCase{
-			{
-				name:        "object present in both Storage and LegacyStorage",
-				inputLegacy: exampleOption,
-				setupLegacyFn: func(m *mock.Mock) {
-					m.On("List", mock.Anything, mock.Anything).Return(exampleList, nil)
-				},
-				setupStorageFn: func(m *mock.Mock) {
-					m.On("List", mock.Anything, mock.Anything).Return(anotherList, nil)
-				},
-			},
-		}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			l := (LegacyStorage)(nil)
-			s := (Storage)(nil)
-			m := &mock.Mock{}
-
-			ls := legacyStoreMock{m, l}
-			us := storageMock{m, s}
-
-			if tt.setupLegacyFn != nil {
-				tt.setupLegacyFn(m)
-			}
-			if tt.setupStorageFn != nil {
-				tt.setupStorageFn(m)
-			}
-
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode2,
-				Reg:  p,
-			})
-
-			obj, err := dw.List(context.Background(), &metainternalversion.ListOptions{})
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-			assert.Equal(t, exampleList, obj)
 		})
 	}
 }

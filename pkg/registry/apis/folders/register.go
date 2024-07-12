@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
-	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -21,7 +20,6 @@ import (
 	"github.com/grafana/grafana/pkg/apimachinery/utils"
 	"github.com/grafana/grafana/pkg/apis/folder/v0alpha1"
 	grafanarest "github.com/grafana/grafana/pkg/apiserver/rest"
-	serverlocksvc "github.com/grafana/grafana/pkg/infra/serverlock"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/apiserver/builder"
 	"github.com/grafana/grafana/pkg/services/apiserver/endpoints/request"
@@ -38,12 +36,11 @@ var resourceInfo = v0alpha1.FolderResourceInfo
 
 // This is used just so wire has something unique to return
 type FolderAPIBuilder struct {
-	gv                schema.GroupVersion
-	features          featuremgmt.FeatureToggles
-	namespacer        request.NamespaceMapper
-	folderSvc         folder.Service
-	accessControl     accesscontrol.AccessControl
-	serverLockService *serverlocksvc.ServerLockService
+	gv            schema.GroupVersion
+	features      featuremgmt.FeatureToggles
+	namespacer    request.NamespaceMapper
+	folderSvc     folder.Service
+	accessControl accesscontrol.AccessControl
 }
 
 func RegisterAPIService(cfg *setting.Cfg,
@@ -52,19 +49,17 @@ func RegisterAPIService(cfg *setting.Cfg,
 	folderSvc folder.Service,
 	accessControl accesscontrol.AccessControl,
 	registerer prometheus.Registerer,
-	serverLockService *serverlocksvc.ServerLockService,
 ) *FolderAPIBuilder {
 	if !features.IsEnabledGlobally(featuremgmt.FlagGrafanaAPIServerWithExperimentalAPIs) {
 		return nil // skip registration unless opting into experimental apis
 	}
 
 	builder := &FolderAPIBuilder{
-		gv:                resourceInfo.GroupVersion(),
-		features:          features,
-		namespacer:        request.GetNamespaceMapper(cfg),
-		folderSvc:         folderSvc,
-		accessControl:     accessControl,
-		serverLockService: serverLockService,
+		gv:            resourceInfo.GroupVersion(),
+		features:      features,
+		namespacer:    request.GetNamespaceMapper(cfg),
+		folderSvc:     folderSvc,
+		accessControl: accessControl,
 	}
 	apiregistration.RegisterAPI(builder)
 	return builder
@@ -147,20 +142,7 @@ func (b *FolderAPIBuilder) GetAPIGroupInfo(
 		if err != nil {
 			return nil, err
 		}
-
-		requestInfo := &k8srequest.RequestInfo{
-			APIGroup:  v0alpha1.GROUP,
-			Resource:  v0alpha1.RESOURCE,
-			Name:      "",
-			Namespace: b.namespacer(int64(1)),
-		}
-
-		storage[resourceInfo.StoragePath()], err = dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store, grafanarest.DualWriterOptions{
-			Mode:              grafanarest.Mode1,
-			Reg:               reg,
-			RequestInfo:       requestInfo,
-			ServerLockService: b.serverLockService,
-		})
+		storage[resourceInfo.StoragePath()], err = dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, store)
 		if err != nil {
 			return nil, err
 		}

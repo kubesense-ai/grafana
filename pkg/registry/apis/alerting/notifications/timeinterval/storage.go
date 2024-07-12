@@ -7,7 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -16,7 +15,6 @@ import (
 	model "github.com/grafana/grafana/pkg/apis/alerting_notifications/v0alpha1"
 	grafanaregistry "github.com/grafana/grafana/pkg/apiserver/registry/generic"
 	grafanarest "github.com/grafana/grafana/pkg/apiserver/rest"
-	serverlocksvc "github.com/grafana/grafana/pkg/infra/serverlock"
 	"github.com/grafana/grafana/pkg/services/apiserver/endpoints/request"
 	"github.com/grafana/grafana/pkg/services/apiserver/utils"
 )
@@ -38,8 +36,6 @@ func NewStorage(
 	scheme *runtime.Scheme,
 	optsGetter generic.RESTOptionsGetter,
 	dualWriteBuilder grafanarest.DualWriteBuilder,
-	reg prometheus.Registerer,
-	serverLockService *serverlocksvc.ServerLockService,
 ) (rest.Storage, error) {
 	legacyStore := &legacyStorage{
 		service:    legacySvc,
@@ -80,20 +76,7 @@ func NewStorage(
 		if err := s.CompleteWithOptions(options); err != nil {
 			return nil, err
 		}
-
-		requestInfo := &k8srequest.RequestInfo{
-			APIGroup:  model.GROUP,
-			Resource:  "timeintervals",
-			Name:      "",
-			Namespace: namespacer(int64(1)),
-		}
-
-		return dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, storage{Store: s}, grafanarest.DualWriterOptions{
-			Mode:              desiredMode,
-			Reg:               reg,
-			RequestInfo:       requestInfo,
-			ServerLockService: serverLockService,
-		})
+		return dualWriteBuilder(resourceInfo.GroupResource(), legacyStore, storage{Store: s})
 	}
 	return legacyStore, nil
 }

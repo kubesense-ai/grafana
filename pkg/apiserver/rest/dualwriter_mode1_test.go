@@ -72,10 +72,7 @@ func TestMode1_Create(t *testing.T) {
 				tt.setupStorageFn(m)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode1,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode1, ls, us, p)
 
 			obj, err := dw.Create(context.Background(), tt.input, func(context.Context, runtime.Object) error { return nil }, &metav1.CreateOptions{})
 
@@ -138,10 +135,7 @@ func TestMode1_Get(t *testing.T) {
 				tt.setupStorageFn(m, tt.input)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode1,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode1, ls, us, p)
 
 			obj, err := dw.Get(context.Background(), tt.input, &metav1.GetOptions{})
 
@@ -192,10 +186,7 @@ func TestMode1_List(t *testing.T) {
 				tt.setupStorageFn(m)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode1,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode1, ls, us, p)
 
 			_, err := dw.List(context.Background(), &metainternalversion.ListOptions{})
 
@@ -250,10 +241,7 @@ func TestMode1_Delete(t *testing.T) {
 				tt.setupStorageFn(m, tt.input)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode1,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode1, ls, us, p)
 
 			obj, _, err := dw.Delete(context.Background(), tt.input, func(ctx context.Context, obj runtime.Object) error { return nil }, &metav1.DeleteOptions{})
 
@@ -312,10 +300,7 @@ func TestMode1_DeleteCollection(t *testing.T) {
 				tt.setupStorageFn(m, tt.input)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode1,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode1, ls, us, p)
 
 			obj, err := dw.DeleteCollection(context.Background(), func(ctx context.Context, obj runtime.Object) error { return nil }, tt.input, &metainternalversion.ListOptions{})
 
@@ -391,10 +376,7 @@ func TestMode1_Update(t *testing.T) {
 				tt.setupGetFn(m, tt.input)
 			}
 
-			dw := NewDualWriter(ls, us, DualWriterOptions{
-				Mode: Mode1,
-				Reg:  p,
-			})
+			dw := NewDualWriter(Mode1, ls, us, p)
 
 			obj, _, err := dw.Update(context.Background(), tt.input, updatedObjInfoObj{}, func(ctx context.Context, obj runtime.Object) error { return nil }, func(ctx context.Context, obj, old runtime.Object) error { return nil }, false, &metav1.UpdateOptions{})
 

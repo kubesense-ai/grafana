@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -32,10 +33,9 @@ const mode2Str = "2"
 
 // NewDualWriterMode2 returns a new DualWriter in mode 2.
 // Mode 2 represents writing to LegacyStorage and Storage and reading from LegacyStorage.
-func newDualWriterMode2(legacy LegacyStorage, storage Storage, dwm *dualWriterMetrics, requestInfo *request.RequestInfo, serverLockService ServerLockService) *DualWriterMode2 {
+func newDualWriterMode2(legacy LegacyStorage, storage Storage, dwm *dualWriterMetrics) *DualWriterMode2 {
 	return &DualWriterMode2{
 		Legacy: legacy, Storage: storage, Log: klog.NewKlogr().WithName("DualWriterMode2").WithValues("mode", mode2Str), dualWriterMetrics: dwm,
-		requestInfo: requestInfo, serverLockService: serverLockService,
 	}
 }
 
@@ -433,7 +433,13 @@ func getSyncRequester(orgId int64) *identity.StaticRequester {
 	}
 }
 
-func (d *DualWriterMode2) getList(ctx context.Context, obj rest.Lister, listOptions *metainternalversion.ListOptions) ([]runtime.Object, error) {
+type syncItem struct {
+	name       string
+	objStorage runtime.Object
+	objLegacy  runtime.Object
+}
+
+func getList(ctx context.Context, obj rest.Lister, listOptions *metainternalversion.ListOptions) ([]runtime.Object, error) {
 	ll, err := obj.List(ctx, listOptions)
 	if err != nil {
 		return nil, err
@@ -442,33 +448,29 @@ func (d *DualWriterMode2) getList(ctx context.Context, obj rest.Lister, listOpti
 	return meta.ExtractList(ll)
 }
 
-type syncItem struct {
-	name       string
-	objStorage runtime.Object
-	objLegacy  runtime.Object
-}
+func DualWriterMode2Sync(ctx context.Context, legacy LegacyStorage, storage Storage, reg prometheus.Registerer, serverLockService ServerLockService, requestInfo *request.RequestInfo) error {
+	metrics := &dualWriterMetrics{}
+	metrics.init(reg)
 
-// Sync ...
-func (d *DualWriterMode2) Sync(ctx context.Context) error {
 	startSync := time.Now()
 
-	log := d.Log.WithValues("method", "sync", "mode", "2")
+	log := klog.NewKlogr().WithName("DualWriterMode2Syncer")
 
-	err := d.serverLockService.LockExecuteAndRelease(ctx, "dualwriter mode 2 sync", time.Minute*30, func(context.Context) {
+	err := serverLockService.LockExecuteAndRelease(ctx, "dualwriter mode 2 sync", time.Minute*30, func(context.Context) {
 		orgId := int64(1)
 
 		ctx = klog.NewContext(ctx, log)
 		ctx = identity.WithRequester(ctx, getSyncRequester(orgId))
-		ctx = request.WithNamespace(ctx, d.requestInfo.Namespace)
-		ctx = request.WithRequestInfo(ctx, d.requestInfo)
+		ctx = request.WithNamespace(ctx, requestInfo.Namespace)
+		ctx = request.WithRequestInfo(ctx, requestInfo)
 
-		legacyList, err := d.getList(ctx, d.Legacy, &metainternalversion.ListOptions{})
+		legacyList, err := getList(ctx, legacy, &metainternalversion.ListOptions{})
 		if err != nil {
 			log.Error(err, "unable to extract list from legacy storage")
 			return
 		}
 
-		storageList, err := d.getList(ctx, d.Storage, &metainternalversion.ListOptions{})
+		storageList, err := getList(ctx, storage, &metainternalversion.ListOptions{})
 		if err != nil {
 			log.Error(err, "unable to extract list from storage")
 			return
@@ -534,7 +536,7 @@ func (d *DualWriterMode2) Sync(ctx context.Context) error {
 				}
 
 				objInfo := rest.DefaultUpdatedObjectInfo(item.objLegacy, []rest.TransformFunc{}...)
-				res, _, err := d.Storage.Update(ctx,
+				res, _, err := storage.Update(ctx,
 					name,
 					objInfo,
 					func(ctx context.Context, obj runtime.Object) error { return nil },
@@ -550,13 +552,13 @@ func (d *DualWriterMode2) Sync(ctx context.Context) error {
 			// delete if object does not exists on legacy but exists on storage
 			if item.objLegacy == nil && item.objStorage != nil {
 				ctx = request.WithRequestInfo(ctx, &request.RequestInfo{
-					APIGroup:  d.requestInfo.APIGroup,
-					Resource:  d.requestInfo.Resource,
+					APIGroup:  requestInfo.APIGroup,
+					Resource:  requestInfo.Resource,
 					Name:      name,
-					Namespace: d.requestInfo.Namespace,
+					Namespace: requestInfo.Namespace,
 				})
 
-				deletedS, _, err := d.Storage.Delete(ctx, name, nil, &metav1.DeleteOptions{})
+				deletedS, _, err := storage.Delete(ctx, name, nil, &metav1.DeleteOptions{})
 				if err != nil {
 					if !apierrors.IsNotFound(err) {
 						log.WithValues("objectList", deletedS).Error(err, "could not delete from storage")
@@ -569,7 +571,7 @@ func (d *DualWriterMode2) Sync(ctx context.Context) error {
 		log.Error(err, "Server lock for dualwriter mode 2 sync already exists")
 	}
 
-	d.recordSyncDuration(err != nil, mode2Str, startSync)
+	metrics.recordSyncDuration(err != nil, mode2Str, startSync)
 
 	return err
 }

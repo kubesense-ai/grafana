@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -23,7 +22,9 @@ import (
 	"github.com/grafana/grafana/pkg/infra/log"
 	serverlocksvc "github.com/grafana/grafana/pkg/infra/serverlock"
 	"github.com/grafana/grafana/pkg/infra/tracing"
+	"github.com/grafana/grafana/pkg/registry/apis/dashboard/access"
 	"github.com/grafana/grafana/pkg/registry/apis/dashboard/legacy"
+
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/apiserver/builder"
 	"github.com/grafana/grafana/pkg/services/apiserver/endpoints/request"
@@ -44,6 +45,7 @@ type DashboardsAPIBuilder struct {
 	accessControl     accesscontrol.AccessControl
 	legacy            *dashboardStorage
 	serverLockService *serverlocksvc.ServerLockService
+	access            access.DashboardAccess
 
 	log log.Logger
 }
@@ -177,19 +179,7 @@ func (b *DashboardsAPIBuilder) GetAPIGroupInfo(
 			return nil, err
 		}
 
-		requestInfo := &k8srequest.RequestInfo{
-			APIGroup:  v0alpha1.GROUP,
-			Resource:  "dashboards",
-			Name:      "",
-			Namespace: b.namespacer(int64(1)),
-		}
-
-		storage[dash.StoragePath()], err = dualWriteBuilder(dash.GroupResource(), legacyStore, store, grafanarest.DualWriterOptions{
-			Mode:              grafanarest.Mode1,
-			Reg:               reg,
-			RequestInfo:       requestInfo,
-			ServerLockService: b.serverLockService,
-		})
+		storage[dash.StoragePath()], err = dualWriteBuilder(dash.StoragePath(), legacyStore, store)
 		if err != nil {
 			return nil, err
 		}

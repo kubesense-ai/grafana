@@ -20,6 +20,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/version"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
+	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/util/openapi"
@@ -27,10 +28,12 @@ import (
 	k8stracing "k8s.io/component-base/tracing"
 	"k8s.io/kube-openapi/pkg/common"
 
+	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/web"
 
 	"github.com/grafana/grafana/pkg/apiserver/endpoints/filters"
 	grafanarest "github.com/grafana/grafana/pkg/apiserver/rest"
+	"github.com/grafana/grafana/pkg/services/apiserver/endpoints/request"
 	"github.com/grafana/grafana/pkg/services/apiserver/options"
 )
 
@@ -154,6 +157,7 @@ func InstallAPIs(
 	storageOpts *options.StorageOptions,
 	reg prometheus.Registerer,
 	kvStore grafanarest.NamespacedKVStore,
+	cfg *setting.Cfg,
 	serverLock ServerLockService,
 ) error {
 	// dual writing is only enabled when the storage type is not legacy.
@@ -170,12 +174,23 @@ func InstallAPIs(
 
 			// Moving from one version to the next can only happen after the previous step has
 			// successfully synchronized.
-			currentMode, err := grafanarest.SetDualWritingMode(context.Background(), kvStore, legacy, storage, key, mode, reg)
+			currentMode, err := grafanarest.SetDualWritingMode(context.Background(), kvStore, legacy, storage, key, mode)
 			if err != nil {
 				return nil, err
 			}
 			if currentMode == grafanarest.Mode0 {
 				return legacy, nil
+			}
+
+			if currentMode == 2 {
+				requestInfo := &k8srequest.RequestInfo{
+					APIGroup:  gr.Group,
+					Resource:  gr.Resource,
+					Name:      "",
+					Namespace: request.GetNamespaceMapper(cfg)(int64(1)),
+				}
+				grafanarest.DualWriterMode2Sync(context.Background(), legacy, storage, reg, serverLock, requestInfo)
+
 			}
 			return grafanarest.NewDualWriter(currentMode, legacy, storage, reg), nil
 		}
