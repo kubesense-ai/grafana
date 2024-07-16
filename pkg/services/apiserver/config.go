@@ -36,6 +36,7 @@ func applyGrafanaConfig(cfg *setting.Cfg, features featuremgmt.FeatureToggles, o
 
 	apiserverCfg := cfg.SectionWithEnvOverrides("grafana-apiserver")
 	unifiedStorageModeCfg := cfg.SectionWithEnvOverrides("unified_storage_mode")
+	unifiedStorageDataSyncJobEnabledCfg := cfg.SectionWithEnvOverrides("unified_storage_data_sync_job_enabled")
 
 	o.RecommendedOptions.Etcd.StorageConfig.Transport.ServerList = apiserverCfg.Key("etcd_servers").Strings(",")
 
@@ -58,6 +59,9 @@ func applyGrafanaConfig(cfg *setting.Cfg, features featuremgmt.FeatureToggles, o
 	o.StorageOptions.Address = apiserverCfg.Key("address").MustString(o.StorageOptions.Address)
 	o.StorageOptions.DualWriterDesiredModes = map[string]grafanarest.DualWriterMode{
 		playlist.GROUPRESOURCE: grafanarest.DualWriterMode(unifiedStorageModeCfg.Key(playlist.GROUPRESOURCE).MustInt(0)),
+	}
+	o.StorageOptions.DualWriterDataSyncJobEnabled = map[string]bool{
+		playlist.RESOURCE + "." + playlist.GROUP: unifiedStorageDataSyncJobEnabledCfg.Key(playlist.RESOURCE + "." + playlist.GROUP).MustBool(false),
 	}
 
 	// TODO: ensure backwards compatibility with production
