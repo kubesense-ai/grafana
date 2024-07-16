@@ -182,16 +182,18 @@ func InstallAPIs(
 				return legacy, nil
 			}
 
-			if currentMode == 2 {
-				requestInfo := &k8srequest.RequestInfo{
-					APIGroup:  gr.Group,
-					Resource:  gr.Resource,
-					Name:      "",
-					Namespace: request.GetNamespaceMapper(cfg)(int64(1)),
-				}
-				err = grafanarest.DualWriterMode2Sync(context.Background(), legacy, storage, reg, serverLock, requestInfo)
-				if err != nil {
-					return nil, err
+			if cfg.SectionWithEnvOverrides("unified_storage_data_sync_job_enabled").Key(key).MustBool(false) {
+				if currentMode == 2 {
+					requestInfo := &k8srequest.RequestInfo{
+						APIGroup:  gr.Group,
+						Resource:  gr.Resource,
+						Name:      "",
+						Namespace: request.GetNamespaceMapper(cfg)(int64(1)),
+					}
+					err = grafanarest.DualWriterMode2Sync(context.Background(), legacy, storage, reg, serverLock, requestInfo)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 			return grafanarest.NewDualWriter(currentMode, legacy, storage, reg), nil
