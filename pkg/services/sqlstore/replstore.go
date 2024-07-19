@@ -2,6 +2,7 @@ package sqlstore
 
 import (
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -43,7 +44,6 @@ func (rs *ReplStore) ReadReplica() *SQLStore {
 		rs.log.Debug("ReadReplica not configured, using main SQLStore")
 		return rs.SQLStore
 	}
-	rs.log.Debug("Using ReadReplica")
 	return rs.nextRepl()
 }
 
@@ -82,6 +82,10 @@ func ProvideServiceWithReadReplica(primary *SQLStore, cfg *setting.Cfg,
 	replCfgs, err := NewRODatabaseConfigs(cfg, features)
 	if err != nil {
 		return nil, err
+	}
+
+	if err := validateReplicaConfigs(primary.dbCfg, replCfgs); err != nil {
+		return nil, fmt.Errorf("failed to validate replica configurations: %w", err)
 	}
 
 	if len(replCfgs) > 0 {
