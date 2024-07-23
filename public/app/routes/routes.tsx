@@ -436,7 +436,7 @@ export function getAppRoutes(): RouteDescriptor[] {
     },
     config.featureToggles.dashboardRestoreUI && {
       path: '/dashboard/recently-deleted',
-      roles: () => contextSrv.evaluatePermission([AccessControlAction.DashboardsDelete]),
+      roles: () => ['Admin'],
       component: SafeDynamicImport(
         () => import(/* webpackChunkName: "RecentlyDeletedPage" */ 'app/features/browse-dashboards/RecentlyDeletedPage')
       ),
@@ -505,13 +505,18 @@ export function getAppRoutes(): RouteDescriptor[] {
         () => import(/* webpackChunkName: "NotificationsPage"*/ 'app/features/notifications/NotificationsPage')
       ),
     },
-    {
+    config.featureToggles.exploreMetrics && {
       path: '/explore/metrics',
       chromeless: false,
       exact: false,
+      roles: () => contextSrv.evaluatePermission([AccessControlAction.DataSourcesExplore]),
       component: SafeDynamicImport(
         () => import(/* webpackChunkName: "DataTrailsPage"*/ 'app/features/trails/DataTrailsPage')
       ),
+    },
+    {
+      path: '/bookmarks',
+      component: () => <NavLandingPage navId="bookmarks" />,
     },
     ...getPluginCatalogRoutes(),
     ...getSupportBundleRoutes(),
