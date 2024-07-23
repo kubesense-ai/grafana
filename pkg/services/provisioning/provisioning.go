@@ -273,15 +273,15 @@ func (ps *ProvisioningServiceImpl) ProvisionAlerting(ctx context.Context) error 
 		alertingauthz.NewRuleService(ps.ac),
 	)
 	configStore := legacy_storage.NewAlertmanagerConfigStore(&st)
-	receiverStore := legacy_storage.NewReceiverStore(
-		&st,
-		st,
-		ps.SQLStore,
-		validation.ValidateProvenanceRelaxed,
-	)
+	receiverAc := alertingauthz.NewReceiverAccess(ps.ac, true)
 	receiverSvc := notifier.NewReceiverService(
-		ps.ac,
-		receiverStore,
+		receiverAc,
+		legacy_storage.NewReceiverStore(
+			&st,
+			st,
+			ps.SQLStore,
+			validation.ValidateProvenanceRelaxed,
+		),
 		ps.secretService,
 		ps.log,
 	)

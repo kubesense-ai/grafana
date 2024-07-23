@@ -6,8 +6,6 @@ import (
 
 	"github.com/grafana/grafana/pkg/apimachinery/identity"
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/services/accesscontrol"
-	ac "github.com/grafana/grafana/pkg/services/ngalert/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/ngalert/api/tooling/definitions"
 	"github.com/grafana/grafana/pkg/services/ngalert/models"
 	"github.com/grafana/grafana/pkg/services/secrets"
@@ -15,10 +13,17 @@ import (
 
 // ReceiverService is the service for managing alertmanager receivers.
 type ReceiverService struct {
-	ac                accesscontrol.AccessControl
+	authz             receiverAccessControlService
 	receiverStore     receiverStore
 	encryptionService secrets.Service
 	log               log.Logger
+}
+
+// receiverAccessControlService provides access control for receivers.
+type receiverAccessControlService interface {
+	HasList(ctx context.Context, user identity.Requester) (bool, error)
+	HasReadAll(ctx context.Context, user identity.Requester) (bool, error)
+	AuthorizeReadDecryptedAll(ctx context.Context, user identity.Requester) error
 }
 
 type receiverStore interface {
@@ -28,13 +33,13 @@ type receiverStore interface {
 }
 
 func NewReceiverService(
-	ac accesscontrol.AccessControl,
+	authz receiverAccessControlService,
 	receiverStore receiverStore,
 	encryptionService secrets.Service,
 	log log.Logger,
 ) *ReceiverService {
 	return &ReceiverService{
-		ac:                ac,
+		authz:             authz,
 		encryptionService: encryptionService,
 		log:               log,
 		receiverStore:     receiverStore,
@@ -42,50 +47,19 @@ func NewReceiverService(
 }
 
 func (rs *ReceiverService) shouldDecrypt(ctx context.Context, user identity.Requester, reqDecrypt bool) (bool, error) {
-	decryptAccess, err := rs.hasReadDecrypted(ctx, user)
-	if err != nil {
+	if !reqDecrypt {
+		return false, nil
+	}
+	if err := rs.authz.AuthorizeReadDecryptedAll(ctx, user); err != nil {
 		return false, err
 	}
 
-	if reqDecrypt && !decryptAccess {
-		return false, ac.NewAuthorizationErrorWithPermissions("read any decrypted receiver", nil) // TODO: Replace with authz service.
-	}
-
-	return decryptAccess && reqDecrypt, nil
-}
-
-// hasReadDecrypted checks if the user has permission to read decrypted secure settings.
-func (rs *ReceiverService) hasReadDecrypted(ctx context.Context, user identity.Requester) (bool, error) {
-	return rs.ac.Evaluate(ctx, user, accesscontrol.EvalAny(
-		accesscontrol.EvalPermission(accesscontrol.ActionAlertingReceiversReadSecrets),
-		accesscontrol.EvalPermission(accesscontrol.ActionAlertingProvisioningReadSecrets), // TODO: Add scope all when we implement FGAC.
-	))
-}
-
-// hasReadRedacted checks if the user has permission to read redacted secure settings.
-func (rs *ReceiverService) hasReadRedacted(ctx context.Context, user identity.Requester) (bool, error) {
-	return rs.ac.Evaluate(ctx, user, accesscontrol.EvalAny(
-		accesscontrol.EvalPermission(accesscontrol.ActionAlertingProvisioningRead),
-		accesscontrol.EvalPermission(accesscontrol.ActionAlertingProvisioningReadSecrets),
-		accesscontrol.EvalPermission(accesscontrol.ActionAlertingNotificationsProvisioningRead),
-		accesscontrol.EvalPermission(accesscontrol.ActionAlertingNotificationsRead),
-		//accesscontrol.EvalPermission(accesscontrol.ActionAlertingReceiversRead, ScopeReceiversProvider.GetResourceAllScope()), // TODO: Add new permissions.
-		//accesscontrol.EvalPermission(accesscontrol.ActionAlertingReceiversReadSecrets, ScopeReceiversProvider.GetResourceAllScope(),
-	))
-}
-
-// hasList checks if the user has permission to list receivers.
-func (rs *ReceiverService) hasList(ctx context.Context, user identity.Requester) (bool, error) {
-	return rs.ac.Evaluate(ctx, user, accesscontrol.EvalPermission(accesscontrol.ActionAlertingReceiversList))
+	return true, nil
 }
 
 // GetReceiver returns a receiver by name.
 // The receiver's secure settings are decrypted if requested and the user has access to do so.
 func (rs *ReceiverService) GetReceiver(ctx context.Context, q models.GetReceiverQuery, user identity.Requester) (definitions.GettableApiReceiver, error) {
-	if q.Decrypt && user == nil {
-		return definitions.GettableApiReceiver{}, ac.NewAuthorizationErrorWithPermissions("read any decrypted receiver", nil) // TODO: Replace with authz service.
-	}
-
 	rcv, err := rs.receiverStore.GetReceiver(ctx, q.OrgID, models.GetUID(q.Name))
 	if err != nil {
 		return definitions.GettableApiReceiver{}, err
@@ -103,10 +77,6 @@ func (rs *ReceiverService) GetReceiver(ctx context.Context, q models.GetReceiver
 // GetReceivers returns a list of receivers a user has access to.
 // Receivers can be filtered by name, and secure settings are decrypted if requested and the user has access to do so.
 func (rs *ReceiverService) GetReceivers(ctx context.Context, q models.GetReceiversQuery, user identity.Requester) ([]definitions.GettableApiReceiver, error) {
-	if q.Decrypt && user == nil {
-		return nil, ac.NewAuthorizationErrorWithPermissions("read any decrypted receiver", nil) // TODO: Replace with authz service.
-	}
-
 	uids := make([]string, 0, len(q.Names))
 	for _, name := range q.Names {
 		uids = append(uids, models.GetUID(name))
@@ -117,12 +87,17 @@ func (rs *ReceiverService) GetReceivers(ctx context.Context, q models.GetReceive
 		return nil, err
 	}
 
-	readRedactedAccess, err := rs.hasReadRedacted(ctx, user)
+	decrypt, err := rs.shouldDecrypt(ctx, user, q.Decrypt)
 	if err != nil {
 		return nil, err
 	}
 
-	listAccess, err := rs.hasList(ctx, user)
+	readRedactedAccess, err := rs.authz.HasReadAll(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	listAccess, err := rs.authz.HasList(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -130,17 +105,12 @@ func (rs *ReceiverService) GetReceivers(ctx context.Context, q models.GetReceive
 	// User doesn't have any permissions on the receivers.
 	// This is mostly a safeguard as it should not be possible with current API endpoints + middleware authentication.
 	if !listAccess && !readRedactedAccess {
-		return nil, ac.NewAuthorizationErrorWithPermissions("read any receiver", nil) // TODO: Replace with authz service.
+		return nil, nil
 	}
 
 	var output []definitions.GettableApiReceiver
 	for i := q.Offset; i < len(receivers); i++ {
 		r := receivers[i]
-
-		decrypt, err := rs.shouldDecrypt(ctx, user, q.Decrypt)
-		if err != nil {
-			return nil, err
-		}
 
 		decryptFn := rs.decryptOrRedact(ctx, decrypt, r.Name, "")
 
