@@ -71,7 +71,7 @@ func (rs *ReceiverService) GetReceiver(ctx context.Context, q models.GetReceiver
 	}
 	decryptFn := rs.decryptOrRedact(ctx, decrypt, q.Name, "")
 
-	return ReceiverToGettable(rcv, decryptFn, false)
+	return ReceiverToGettable(rcv, decryptFn)
 }
 
 // GetReceivers returns a list of receivers a user has access to.
@@ -97,7 +97,54 @@ func (rs *ReceiverService) GetReceivers(ctx context.Context, q models.GetReceive
 		return nil, err
 	}
 
+	// User doesn't have any permissions on the receivers.
+	// This is mostly a safeguard as it should not be possible with current API endpoints + middleware authentication.
+	if !readRedactedAccess {
+		return nil, nil
+	}
+
+	var output []definitions.GettableApiReceiver
+	for i := q.Offset; i < len(receivers); i++ {
+		r := receivers[i]
+
+		decryptFn := rs.decryptOrRedact(ctx, decrypt, r.Name, "")
+		res, err := ReceiverToGettable(r, decryptFn)
+		if err != nil {
+			return nil, err
+		}
+
+		output = append(output, res)
+		// stop if we have reached the limit or we have found all the requested receivers
+		if (len(output) == q.Limit && q.Limit > 0) || (len(output) == len(q.Names)) {
+			break
+		}
+	}
+
+	return output, nil
+}
+
+// ListReceivers returns a list of receivers a user has access to.
+// Receivers can be filtered by name.
+// This offers an looser permissions compared to GetReceivers. When a user doesn't have read access it will check for list access instead of returning an empty list.
+// If the users has list access, all receiver settings will be removed from the response. This option is for backwards compatibility with the v1/receivers endpoint
+// and should be removed when FGAC is fully implemented.
+func (rs *ReceiverService) ListReceivers(ctx context.Context, q models.ListReceiversQuery, user identity.Requester) ([]definitions.GettableApiReceiver, error) { // TODO: Remove this method with FGAC.
 	listAccess, err := rs.authz.HasList(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	readRedactedAccess, err := rs.authz.HasReadAll(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	uids := make([]string, 0, len(q.Names))
+	for _, name := range q.Names {
+		uids = append(uids, models.GetUID(name))
+	}
+
+	receivers, err := rs.receiverStore.GetReceivers(ctx, q.OrgID, uids...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,14 +159,15 @@ func (rs *ReceiverService) GetReceivers(ctx context.Context, q models.GetReceive
 	for i := q.Offset; i < len(receivers); i++ {
 		r := receivers[i]
 
-		decryptFn := rs.decryptOrRedact(ctx, decrypt, r.Name, "")
+		// Remove settings.
+		for _, integration := range r.Integrations {
+			integration.Settings = nil
+			integration.SecureSettings = nil
+			integration.DisableResolveMessage = false
+		}
 
-		// Only has permission to list. This reduces from:
-		// - Has List permission
-		// - Doesn't have ReadRedacted (or ReadDecrypted permission since it's a subset).
-		listOnly := !readRedactedAccess
-
-		res, err := ReceiverToGettable(r, decryptFn, listOnly)
+		decryptFn := rs.decryptOrRedact(ctx, false, r.Name, "")
+		res, err := ReceiverToGettable(r, decryptFn)
 		if err != nil {
 			return nil, err
 		}
