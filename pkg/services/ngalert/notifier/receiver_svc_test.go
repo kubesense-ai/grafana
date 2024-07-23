@@ -34,7 +34,7 @@ func TestReceiverService_GetReceiver(t *testing.T) {
 
 	redactedUser := &user.SignedInUser{OrgID: 1, Permissions: map[int64]map[string][]string{
 		1: {
-			accesscontrol.ActionAlertingProvisioningRead: nil,
+			accesscontrol.ActionAlertingNotificationsRead: nil,
 		},
 	}}
 
@@ -62,7 +62,7 @@ func TestReceiverService_GetReceivers(t *testing.T) {
 
 	redactedUser := &user.SignedInUser{OrgID: 1, Permissions: map[int64]map[string][]string{
 		1: {
-			accesscontrol.ActionAlertingProvisioningRead: nil,
+			accesscontrol.ActionAlertingNotificationsRead: nil,
 		},
 	}}
 
@@ -95,7 +95,7 @@ func TestReceiverService_DecryptRedact(t *testing.T) {
 	readUser := &user.SignedInUser{
 		OrgID: 1,
 		Permissions: map[int64]map[string][]string{
-			1: {accesscontrol.ActionAlertingProvisioningRead: nil},
+			1: {accesscontrol.ActionAlertingNotificationsRead: nil},
 		},
 	}
 
@@ -103,8 +103,8 @@ func TestReceiverService_DecryptRedact(t *testing.T) {
 		OrgID: 1,
 		Permissions: map[int64]map[string][]string{
 			1: {
-				accesscontrol.ActionAlertingProvisioningRead:        nil,
-				accesscontrol.ActionAlertingProvisioningReadSecrets: nil,
+				accesscontrol.ActionAlertingNotificationsRead:    nil,
+				accesscontrol.ActionAlertingReceiversReadSecrets: nil,
 			},
 		},
 	}
@@ -191,7 +191,7 @@ func createReceiverServiceSut(t *testing.T, encryptSvc secrets.Service) *Receive
 	provisioningStore := fakes.NewFakeProvisioningStore()
 
 	return NewReceiverService(
-		ac.NewReceiverAccess(acimpl.ProvideAccessControl(featuremgmt.WithFeatures(), zanzana.NewNoopClient()), true),
+		ac.NewReceiverAccess(acimpl.ProvideAccessControl(featuremgmt.WithFeatures(), zanzana.NewNoopClient()), false),
 		legacy_storage.NewReceiverStore(store, provisioningStore, xact, validation.ValidateProvenanceRelaxed),
 		encryptSvc,
 		log.NewNopLogger(),
